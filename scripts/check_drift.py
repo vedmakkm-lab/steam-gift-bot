@@ -40,19 +40,13 @@ async def main() -> None:
             commit = await r.json()
         print("deployed commit:", commit["sha"][:7], "-", commit["commit"]["message"].splitlines()[0])
         tree_sha = commit["commit"]["tree"]["sha"]
-        remote = {}
-        stack = [tree_sha]
-        while stack:
-            current = stack.pop()
-            async with s.get(f"https://api.github.com/repos/{OWNER}/{REPO}/git/trees/{current}?recursive=1") as r:
-                tree = await r.json()
-            if tree.get("truncated"):
-                raise RuntimeError("tree truncated — нужны пошаговые запросы")
-            for item in tree["tree"]:
-                if item["type"] == "blob":
-                    remote[item["path"]] = item["sha"]
-                elif item["type"] == "tree":
-                    stack.append(item["sha"])
+        async with s.get(
+            f"https://api.github.com/repos/{OWNER}/{REPO}/git/trees/{tree_sha}?recursive=1"
+        ) as r:
+            tree = await r.json()
+        if tree.get("truncated"):
+            raise RuntimeError("tree truncated — расширьте сравнение")
+        remote = {i["path"]: i["sha"] for i in tree["tree"] if i["type"] == "blob"}
     missing = [p for p in remote if p not in local]
     extra = [p for p in local if p not in remote]
     changed = [p for p in local if p in remote and local[p] != remote[p]]

@@ -121,7 +121,7 @@ async def main() -> None:
             session,
             "POST",
             f"https://api.github.com/repos/{OWNER}/{REPO}/git/trees",
-            {"base_tree": base_commit_sha, "tree": tree},
+            {"tree": tree},  # без base_tree: полное замещение (удалённые файлы исчезают)
         )
         print("tree:", tree_res["sha"])
 
