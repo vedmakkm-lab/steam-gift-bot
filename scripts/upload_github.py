@@ -70,33 +70,43 @@ async def api(session: aiohttp.ClientSession, method: str, url: str, payload: di
         return json.loads(text) if text else {}
 
 
-TOKEN = TOKEN_FILE.read_text(encoding="utf-8").strip()
+# Первый токен (render-deploy) имеет Contents: read+write — его и используем для заливки.
+TOKEN = [ln.strip() for ln in TOKEN_FILE.read_text(encoding="utf-8").splitlines() if ln.strip()][0]
 
 
 async def main() -> None:
     files = collect_files()
     print(f"Файлов к загрузке: {len(files)}")
     async with aiohttp.ClientSession() as session:
-        # 0. пустой репозиторий: первый файл через Contents API (создаёт коммит)
-        readme = ROOT / "README.md"
-        first = await api(
-            session,
-            "PUT",
-            f"https://api.github.com/repos/{OWNER}/{REPO}/contents/README.md",
-            {
-                "message": "Initial commit",
-                "content": base64.b64encode(readme.read_bytes()).decode(),
-            },
-        )
-        base_commit_sha = first["commit"]["sha"]
-        print("первый коммит:", base_commit_sha)
+        # 0. текущее состояние ветки main (если есть)
+        base_commit_sha = None
+        async with session.get(
+            f"https://api.github.com/repos/{OWNER}/{REPO}/git/refs/heads/main",
+            headers={"Authorization": f"Bearer {TOKEN}", "Accept": "application/vnd.github+json"},
+        ) as resp:
+            if resp.status == 200:
+                base_commit_sha = (await resp.json())["object"]["sha"]
+                print("существующий main:", base_commit_sha)
 
-        # 1. блобы для остальных файлов
+        if base_commit_sha is None:
+            # пустой репозиторий: первый файл через Contents API
+            readme = ROOT / "README.md"
+            first = await api(
+                session,
+                "PUT",
+                f"https://api.github.com/repos/{OWNER}/{REPO}/contents/README.md",
+                {
+                    "message": "Initial commit",
+                    "content": base64.b64encode(readme.read_bytes()).decode(),
+                },
+            )
+            base_commit_sha = first["commit"]["sha"]
+            print("первый коммит:", base_commit_sha)
+
+        # 1. блобы
         tree = []
         for path in files:
             rel = path.relative_to(ROOT).as_posix()
-            if rel == "README.md":
-                continue
             content = path.read_bytes()
             blob = await api(
                 session,
@@ -115,13 +125,13 @@ async def main() -> None:
         )
         print("tree:", tree_res["sha"])
 
-        # 2. коммит поверх первого
+        # 2. коммит
         commit = await api(
             session,
             "POST",
             f"https://api.github.com/repos/{OWNER}/{REPO}/git/commits",
             {
-                "message": "Add bot sources",
+                "message": "Fix subscription check for left users; dedupe channels",
                 "tree": tree_res["sha"],
                 "parents": [base_commit_sha],
             },

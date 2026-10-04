@@ -43,12 +43,27 @@ async def add_channel(
     chat_id: int | None,
     username: str | None,
     url: str,
-) -> Channel:
+) -> tuple[Channel, bool]:
+    """Добавить канал. Если канал с таким chat_id/username уже есть — вернуть его.
+
+    Возвращает (канал, был_ли_создан).
+    """
+    res = await session.execute(select(Channel))
+    for ch in res.scalars():
+        same_chat = chat_id is not None and ch.chat_id == chat_id
+        same_username = (
+            username is not None
+            and ch.username is not None
+            and ch.username.lstrip("@").lower() == username.lstrip("@").lower()
+        )
+        if same_chat or same_username:
+            logger.info("Канал %s уже добавлен (#%s) — пропускаю дубль", title, ch.id)
+            return ch, False
     channel = Channel(title=title, chat_id=chat_id, username=username, url=url, is_active=True)
     session.add(channel)
     await session.flush()
     logger.info("Добавлен канал: %s (%s)", title, url)
-    return channel
+    return channel, True
 
 
 async def toggle_active(session: AsyncSession, channel_id: int) -> None:
@@ -74,11 +89,16 @@ async def get_not_subscribed(
     for channel in channels:
         try:
             member = await bot.get_chat_member(channel.target, user_id)
-            is_member = member.status in _SUBSCRIBED_STATUSES or getattr(
-                member, "is_member", True
-            )
-            if not is_member:
-                not_subscribed.append(channel)
+            if member.status in _SUBSCRIBED_STATUSES:
+                # member / administrator / creator — состоит в канале
+                continue
+            if member.status == ChatMemberStatus.RESTRICTED and getattr(
+                member, "is_member", False
+            ):
+                # ограничен, но остаётся участником канала
+                continue
+            # left / kicked / restricted без участия — подписки нет
+            not_subscribed.append(channel)
         except TelegramAPIError as e:
             # Канал недоступен боту (например, бот не администратор) —
             # безопаснее считать, что подписки нет, и показать канал.

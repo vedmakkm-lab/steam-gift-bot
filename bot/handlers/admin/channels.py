@@ -142,7 +142,7 @@ async def ch_link(message: Message, session, state: FSMContext) -> None:
         )
         return
 
-    channel = await channels_svc.add_channel(
+    channel, created = await channels_svc.add_channel(
         session,
         title=data["title"],
         chat_id=data["chat_id"],
@@ -150,8 +150,9 @@ async def ch_link(message: Message, session, state: FSMContext) -> None:
         url=url,
     )
     await session.commit()
+    prefix = "✅ Канал добавлен!" if created else "⚠️ Этот канал уже был добавлен."
     await message.answer(
-        f"✅ Канал добавлен!\n\n{channel_card(channel)}\n\n"
+        f"{prefix}\n\n{channel_card(channel)}\n\n"
         "⚠️ Не забудьте назначить бота администратором канала.",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text="⬅️ К каналам", callback_data="adm:ch")]]
