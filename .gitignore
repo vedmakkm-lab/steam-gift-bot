@@ -1,0 +1,20 @@
+# Секреты
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Базы данных и данные
+*.db
+*.sqlite3
+backups/
+logs/
+
+# Прочее
+.idea/
+.vscode/
+.pytest_cache/
+.gh_token 

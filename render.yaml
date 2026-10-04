@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: steam-gift-bot
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && python main.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: KASPI_NUMBER
+        sync: false
+      - key: DISPLAY_TZ
+        value: Asia/Almaty
+      - key: WEBHOOK_URL
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO
